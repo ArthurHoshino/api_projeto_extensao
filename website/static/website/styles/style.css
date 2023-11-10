@@ -9702,6 +9702,19 @@ a.text-dark:hover, a.text-dark:focus {
   animation: action 1s infinite alternate;
 }
 
+/* Classe adicionadas */
+.text-line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.logo-resize {
+  max-width: 55%;
+  max-height: 55%;
+  margin-top: 8px;
+}
+
 @keyframes action {
   0% {
     transform: translateY(0);
@@ -9709,11 +9722,4 @@ a.text-dark:hover, a.text-dark:focus {
   100% {
     transform: translateY(-15px);
   }
-}
-
-/* Classe adicionada: quebrar linhas */
-.text-line {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
 }
