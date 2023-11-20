@@ -1,88 +1,100 @@
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
 from bs4 import BeautifulSoup
+from lxml import etree
 
 class NuuvemScrapper():
-    def __init__(self) -> None:
+    def __init__(self, driverName, data):
+        self.driverName = driverName
+        self.plataforma = data["P"]
+        self.loja = data["L"]
         self.game_items_nuuvem = {}
         self.game_items_list_nuuvem = []
         self.total_paginas = 0
-        self.pagina_atual = 1
-        self.limite = 0
+        self.page = 1
+
+    def ReabrirDriver1(self, link, offset):
+        try:
+            options = Options()
+            options.add_experimental_option("detach", True)
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            driver.get(link + str(offset))
+            driver.maximize_window()
+            html = driver.page_source
+            web = BeautifulSoup(html, 'html.parser')
+            driver.quit()
+            return web
+        except:
+            pass
+
+    def ReabrirDriver2(self, link):
+        try:
+            options = Options()
+            options.add_experimental_option("detach", True)
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            driver.set_page_load_timeout(15)
+            driver.get(link)
+            driver.maximize_window()
+            html = driver.page_source
+            web = BeautifulSoup(html, 'html.parser')
+            driver.quit()
+            return web
+        except TimeoutException:
+            driver.quit()
+            return None
+        except:
+            pass
 
     def converter_preco_para_float(self, preco):
         try:
             preco = preco.replace('R$', '')
             preco = preco.replace(',', '.')
-            try:
-                return float(preco)
-            except ValueError:
-                return None
+            return float(preco)
         except:
-            pass
+            return None
 
     def manager(self):
         try:
             while True:
-                print(f'Pagina Atual: {self.pagina_atual}')
-                print(f'Pagina Final: {self.total_paginas}')
-                if self.pagina_atual == self.total_paginas or self.limite == 50:
+                if self.page == self.total_paginas or self.page == 50:
                     break
                 else:
                     try:
-                        link = 'https://www.nuuvem.com/br-pt/catalog/price/promo/sort/bestselling/sort-mode/desc/page/' + str(self.pagina_atual)
-                        requisicao = requests.get(link)
-                        site = BeautifulSoup(requisicao.text, 'html.parser')
-                        self.total_paginas = site.find_all('a', attrs={'class': 'pagination--item'})
-                        self.total_paginas = int(self.total_paginas[-1].get_text())
-                        games = site.find_all('a', attrs={'class': 'product-card--wrapper'})
+                        site1 = self.ReabrirDriver1('https://www.nuuvem.com/br-pt/catalog/price/promo/sort/bestselling/sort-mode/desc/page/', self.page)
+                        dom1 = etree.HTML(str(site1))
+                        self.total_paginas = dom1.xpath("//a[contains(@class, 'pagination--item')]")[-1].text
+                        games = dom1.xpath("//div[contains(@class, 'product-card--grid')]")
                     except:
                         break
 
                     for count, game in enumerate(games):
-                        print(f'Game: {count + 1}')
                         try:
-                            link = game['href']
-                            requisicao = requests.get(link)
-                            site = BeautifulSoup(requisicao.text, 'html.parser')
+                            link = game.xpath(".//a")[0].get('href')
+                            site2 = self.ReabrirDriver2(link)
+                            dom2 = etree.HTML(str(site2))
                         except:
                             break
 
-                        if self.converter_preco_para_float(site.find('span', attrs={'class': 'integer'}).get_text() + site.find('span', attrs={'class': 'decimal'}).get_text()) == None:
+                        if len(dom2.xpath("//span[contains(@class, 'integer')]")[0].text + dom2.xpath("//span[contains(@class, 'decimal')]")[0].text) < 1:
                             continue
-                        if self.converter_preco_para_float(site.find('span', attrs={'class': 'product-price--old'}).get_text()[2:]) == None:
-                            continue
-
-                        try:
-                            nome = site.find('h1')['title']
-                        except:
-                            continue
-                        try:
-                            precoDesconto = self.converter_preco_para_float(site.find('span', attrs={'class': 'integer'}).get_text() + site.find('span', attrs={'class': 'decimal'}).get_text())
-                        except:
-                            continue
-                        try:
-                            precoTotal = self.converter_preco_para_float(site.find('span', attrs={'class': 'product-price--old'}).get_text()[2:])
-                        except:
-                            precoTotal = precoDesconto
-
-                        try:
-                            link = link
-                        except:
-                            continue
-
-                        self.game_items_nuuvem.update({'nome': nome})
-                        self.game_items_nuuvem.update({'precoTotal': precoTotal})
-                        self.game_items_nuuvem.update({'precoDesconto': precoDesconto})
-                        self.game_items_nuuvem.update({'plataforma': 'Computador'})
+                        self.game_items_nuuvem.update({'nome': dom2.xpath("//h1[contains(@class, 'product-title')]")[0].get('title')})
+                        self.game_items_nuuvem.update({'precoDesconto': self.converter_preco_para_float(dom2.xpath("//span[contains(@class, 'integer')]")[0].text + dom2.xpath("//span[contains(@class, 'decimal')]")[0].text)})
+                        if len(dom2.xpath("//span[contains(@class, 'product-price--old')]")[0].text) >= 1:
+                            self.game_items_nuuvem.update({'precoTotal': self.converter_preco_para_float(dom2.xpath("//span[contains(@class, 'product-price--old')]")[0].text)})
+                        else:
+                            self.game_items_nuuvem.update({'precoTotal': self.converter_preco_para_float(dom2.xpath("//span[contains(@class, 'integer')]")[0].text + dom2.xpath("//span[contains(@class, 'decimal')]")[0].text)})
+                        self.game_items_nuuvem.update({'plataforma': next(p["id"] for p in self.plataforma if p["nome"] == 'Computador')})
                         self.game_items_nuuvem.update({'midia': 0})
                         self.game_items_nuuvem.update({'link': link})
-                        self.game_items_nuuvem.update({'loja': 'Nuuvem'})
+                        self.game_items_nuuvem.update({'loja': self.loja})
+                        self.game_items_nuuvem.update({'linkImagem': game.xpath(".//img")[0].get('src')})
                         self.game_items_list_nuuvem.append(self.game_items_nuuvem.copy())
 
-                    self.pagina_atual += 1
-                    self.limite += 1
-
-                print()
+                    self.page += 1
         except:
             pass
-
+        finally:
+            return self.game_items_list_nuuvem

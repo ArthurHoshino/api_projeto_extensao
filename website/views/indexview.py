@@ -16,13 +16,13 @@ class IndexView(TemplateView):
 
         if filter != "":
             title = f"Resultados para '{filter}'"
-            products = Produto.objects.filter(nome__icontains=filter).order_by("precoTotal")
+            products = Produto.objects.filter(nome__icontains=filter).order_by("precoDesconto")
         elif id is None:
             title = "Todos os produtos"
             products = Produto.objects.order_by("precoTotal")
         else:
             title = next(c.nome for c in categories if c.id == id)
-            products = Produto.objects.filter(plataforma_id=id).order_by("precoTotal")
+            products = Produto.objects.filter(plataforma_id=id).order_by("precoDesconto")
         
         paginator = Paginator(products, 250)
         page_product_obj = paginator.get_page(page_number)

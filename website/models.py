@@ -20,12 +20,12 @@ class Loja(models.Model):
     
 class Produto(models.Model):
     nome = models.CharField(max_length=255)
-    precoTotal = models.DecimalField(max_digits=10, decimal_places=2)
+    precoTotal = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     precoDesconto = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     loja = models.ForeignKey(Loja, on_delete=models.CASCADE)
     plataforma = models.ForeignKey(Plataforma, on_delete=models.CASCADE)
     midia = models.IntegerField(default=Midia.FISICO, choices=Midia.choices)
-    link = models.CharField(max_length=350)
+    link = models.CharField(max_length=999)
     linkImagem = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):

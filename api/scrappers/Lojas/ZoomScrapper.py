@@ -1,11 +1,17 @@
+import time
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException
+from lxml import etree
 
 class ZoomScrapper():
-    def __init__(self) -> None:
+    def __init__(self, driverName, data):
+        self.driverName = driverName
+        self.plataforma = data["P"]
+        self.loja = data["L"]
         self.page = 1
         self.game_items_zoom = {}
         self.game_items_list_zoom = []
@@ -45,12 +51,21 @@ class ZoomScrapper():
             options = Options()
             options.add_experimental_option("detach", True)
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            driver.set_page_load_timeout(15)
             driver.get(url + str(offset))
             driver.maximize_window()
+            time.sleep(0.5)
+            driver.execute_script('window.scrollBy(0, document.body.scrollHeight)')
+            time.sleep(0.5)
+            driver.execute_script('window.scrollBy(0, document.body.scrollHeight)')
+            time.sleep(0.5)
             html = driver.page_source
             web = BeautifulSoup(html, 'html.parser')
             driver.quit()
             return web
+        except TimeoutException:
+            driver.quit()
+            return None
         except:
             pass
 
@@ -58,12 +73,9 @@ class ZoomScrapper():
         try:
             preco = preco.replace('R$', '')
             preco = preco.replace(',', '.')
-            try:
-                return float(preco)
-            except ValueError:
-                return None
+            return float(preco)
         except:
-            pass
+            return None
 
     def manager(self):
         try:
@@ -71,40 +83,39 @@ class ZoomScrapper():
                 self.page = 1
 
                 while True:
-                    print(f'Pagina:     {self.page}\nPlataforma: {self.urls_plataforma[self.url_index]}')
                     try:
                         site = self.ReabrirDriver(self.urls[self.url_index], self.page)
+                        dom = etree.HTML(str(site))
                     except:
                         self.page += 1
                         continue
-                    games = site.find_all('a', attrs={'class': 'ProductCard_ProductCard_Inner__tsD4M'})
-                    print(len(games))
-                    print()
+                    games = dom.xpath("//a[contains(@class, 'ProductCard_ProductCard_Inner')]")
 
                     for game in games:
                         try:
-                            if self.converter_preco_para_float(game.find('p', attrs={'class': 'Text_Text__h_AF6 Text_MobileHeadingS__Zxam2'}).get_text()) == None:
+                            if len(game.xpath(".//p[contains(@class, 'Text_Text')]")) < 1:
                                 continue
-                            if self.converter_preco_para_float(game.find('p', attrs={'class': 'Text_Text__h_AF6 Text_MobileHeadingS__Zxam2'}).get_text()) == None:
-                                continue
-                            self.game_items_zoom.update({'nome': game.find('h2', attrs={'class': 'Text_Text__h_AF6 Text_MobileLabelXs__ER_cD Text_DesktopLabelSAtLarge__baj_g ProductCard_ProductCard_Name__LT7hv'}).get_text()})
-                            self.game_items_zoom.update({'precoDesconto': self.converter_preco_para_float(game.find('p', attrs={'class': 'Text_Text__h_AF6 Text_MobileHeadingS__Zxam2'}).get_text())})
-                            self.game_items_zoom.update({'precoTotal': self.converter_preco_para_float(game.find('p', attrs={'class': 'Text_Text__h_AF6 Text_MobileHeadingS__Zxam2'}).get_text())})
-                            self.game_items_zoom.update({'plataforma': self.urls_plataforma[self.url_index]})
+                            self.game_items_zoom.update({'nome': game.xpath(".//h2[contains(@class, 'Text_Text')]")[0].text})
+                            self.game_items_zoom.update({'precoDesconto': self.converter_preco_para_float(game.xpath(".//p[contains(@class, 'Text_Text')]")[0].text)})
+                            self.game_items_zoom.update({'precoTotal': self.converter_preco_para_float(game.xpath(".//p[contains(@class, 'Text_Text')]")[0].text)})
+                            self.game_items_zoom.update({'plataforma': next(p["id"] for p in self.plataforma if p["nome"] == self.urls_plataforma[self.url_index])})
                             self.game_items_zoom.update({'midia': 1})
-                            self.game_items_zoom.update({'link': 'https://www.zoom.com.br' + game['href']})
-                            self.game_items_zoom.update({'loja': 'Zoom'})
+                            self.game_items_zoom.update({'link': 'https://www.zoom.com.br' + game.get('href')})
+                            self.game_items_zoom.update({'loja': self.loja})
+                            self.game_items_zoom.update({'linkImagem': game.xpath(".//img")[0].get('src')})
                             self.game_items_list_zoom.append(self.game_items_zoom.copy())
                         except:
                             pass
 
                     self.page += 1
-                    if len(site.find_all('a', attrs={'class': 'ProductCard_ProductCard_Inner__tsD4M'})) < 1:
+                    if (len(games) < 20 and site != None) or self.page >= 125:
                         break
 
                 self.url_index += 1
                 if self.url_index >= 10:
                     break
+
         except:
             pass
-
+        finally:
+            return self.game_items_list_zoom
